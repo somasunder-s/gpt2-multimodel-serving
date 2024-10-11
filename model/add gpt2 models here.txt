@@ -1,0 +1,19 @@
+Add your gpt-2 model files here. For example.
+
+model
+├── domain_b_model
+│   ├── config.json
+│   ├── generation_config.json
+│   ├── merges.txt
+│   ├── model.safetensors
+│   ├── special_tokens_map.json
+│   ├── tokenizer_config.json
+│   └── vocab.json
+└── domain_a_model
+    ├── config.json
+    ├── generation_config.json
+    ├── merges.txt
+    ├── model.safetensors
+    ├── special_tokens_map.json
+    ├── tokenizer_config.json
+    └── vocab.json
