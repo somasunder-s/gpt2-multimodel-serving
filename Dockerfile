@@ -1,47 +1,19 @@
-# Use the official Python image from the Docker Hub
+# Use the official Python image
 FROM python:3.9-slim
 
-# Set environment variables
-# Prevent Python from writing .pyc files
-ENV PYTHONDONTWRITEBYTECODE=1
-# Ensure logs are output in real-time
-ENV PYTHONUNBUFFERED=1
-
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
+# Copy requirements.txt and install dependencies
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the model and app code
-COPY model ./model
-COPY app ./app
+# Copy the application code
+COPY . .
 
-# Expose the port the app runs on
+# Expose the port the app runs on (default for FastAPI is 8000)
 EXPOSE 8000
 
-# Command to run the application
-CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
-
-
-## OLD - Use the official Python image from the Docker Hub
-#FROM python:3.9-slim
-#
-## Set the working directory
-#WORKDIR /app
-#
-## Copy the requirements file and install dependencies
-#COPY requirements.txt .
-#RUN pip install --no-cache-dir -r requirements.txt
-#
-## Copy the model and app code
-#COPY model ./model
-#COPY app ./app
-#
-## Expose the port the app runs on
-#EXPOSE 8000
-#
-## Command to run the application
-#CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the application with Gunicorn and Uvicorn workers
+CMD ["gunicorn", "app.app:app", "-w", "10", "-k", "uvicorn.workers.UvicornWorker", "--threads", "32", "--bind", "0.0.0.0:8000"]
