@@ -31,21 +31,29 @@ Both models are loaded once at process start and pinned to GPU. Each request spe
 
 ## Why this design
 
-- **Single endpoint, multi-model** — operational simplicity over deploying two services. Routing is one dict lookup; memory cost is the sum of model weights, which fit on a single L4.
-- **Gunicorn + uvicorn workers** — process-level parallelism (workers) for CPU-bound preprocessing, async (uvicorn) inside each worker for I/O. 10×32 was the sweet spot found via the benchmarks (see below).
+- **Single endpoint, multi-model** — operational simplicity over deploying two services. Routing is one dict lookup; memory cost is the sum of model weights, which fit on a single L4 (24 GB).
+- **Gunicorn + uvicorn workers** — process-level parallelism (workers) for CPU-bound preprocessing, async (uvicorn) inside each worker for I/O. The Dockerfile defaults to `-w 10 --threads 32`, picked because the sweep below showed throughput plateaus around concurrency 7–9 regardless of worker/thread count, and 10×32 has the most headroom before errors appear.
+- **Two separate models** instead of one model with a routing prefix — each section (internship / education) was fine-tuned on its own labeled data and the two models had different convergence behavior. Routing-by-name keeps the inference code dumb and lets the training side iterate independently.
 - **Docker** — reproducible runtime, deployable to any GPU host (GCP, AWS, on-prem) without environment drift.
 
-## Benchmarking
+## Benchmarking results
 
-`data/gpu_vm_exp_summary.csv` contains throughput / latency measurements across:
+Sweep across worker × thread × client-concurrency on **NVIDIA L4** (16 vCPU, 54 GB RAM, linux-deb), 250 requests per run, 512-token max generation. Full data in `data/gpu_vm_exp_summary.csv` (61 runs); summary below:
 
-- worker count (`w`) × thread count (`t`) × client concurrency (`con`)
-- request volumes up to 250 concurrent
-- on NVIDIA L4 instances (linux-deb, 16 vCPU, 54 GB RAM)
+| Config (w / t / concurrency) | Success | Errors (503) | p90 latency | Throughput |
+|---|---|---|---|---|
+| **10 / 16 / 9** | 248/250 | 2 | 7.30 s | **1.28 req/s** ← peak |
+| 10 / 16 / 8 | 248/250 | 2 | 6.56 s | 1.26 req/s |
+| 8 / 32 / 7 | 249/250 | 1 | 5.82 s | 1.25 req/s |
+| 8 / 32 / 6 (zero-error) | 250/250 | 0 | 5.05 s | 1.24 req/s |
+| 8 / 32 / 4 (low concurrency) | 250/250 | 0 | 3.58 s | 1.17 req/s |
 
-Metrics captured per run: mean / median / p95 / p99 latency, request rate, error rate (HTTP 503 from the server when overloaded).
+**Findings:**
+- Throughput **plateaus at ~1.25 req/s** — limited by GPU compute on 512-token generation, not by web-tier scheduling. More workers/threads can't overcome it.
+- The **error-free zone** is concurrency ≤ 7. Above that, the GPU's effective queue saturates and the server returns 503 (overload-shed). Worker/thread choice mainly affects *how gracefully* the system degrades past saturation.
+- Picking 10×32 in production trades a small p90 latency increase for the most generous error-free band (≈ concurrency 8 still nearly clean).
 
-`data/gpu_summariser.py` aggregates the raw runs into the summary CSV.
+`data/gpu_summariser.py` aggregates raw timing logs into the summary CSV.
 
 ## Tech stack
 
