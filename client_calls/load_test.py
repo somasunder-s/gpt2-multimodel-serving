@@ -11,7 +11,7 @@ headers = {"Content-Type": "application/json"}
 
 # The data payload for the POST request (without the model)
 base_data = {
-    "prompt": [ "Sample input text for load testing the inference endpoint. Replace with whatever shape of input your fine-tuned model expects."],
+    "prompts": ["Sample input text for load testing the inference endpoint. Replace with whatever shape of input your fine-tuned model expects."],
     "max_length": 512
 }
 
@@ -44,8 +44,8 @@ def main():
         for future in concurrent.futures.as_completed(future_to_request):
             try:
                 status_code, response_data, elp_time = future.result()
-                print(f"Response Code: {status_code}, Response: {response_data['generated_text'].split('Output:')[-1]}")
-                # print(f"Response Code: {status_code}, Response: {response_data['generated_text']['Output:'][-1]}")
+                first_text = response_data.get('generated_texts', [''])[0]
+                print(f"Response Code: {status_code}, Response: {first_text.split('Output:')[-1]}")
                 timings.append(elp_time)
 
                 if len(timings) % 250 == 0:

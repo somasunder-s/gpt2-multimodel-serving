@@ -55,7 +55,7 @@ Sweep across worker × thread × client-concurrency on **NVIDIA L4** (16 vCPU, 5
 - The **error-free zone** is concurrency ≤ 7. Above that, the GPU's effective queue saturates and the server returns 503 (overload-shed). Worker/thread choice mainly affects *how gracefully* the system degrades past saturation.
 - Picking 10×32 in production trades a small p90 latency increase for the most generous error-free band (≈ concurrency 8 still nearly clean).
 
-`data/gpu_summariser.py` aggregates raw timing logs into the summary CSV.
+The aggregated summary was produced from per-run timing logs (one CSV per worker/thread/concurrency combination); only the aggregated result is committed here.
 
 ## Tech stack
 
@@ -74,8 +74,7 @@ client_calls/
 ├── load_test.py, load_test_sweep.py  load-test clients (concurrent POSTs)
 └── smoke_test.py                      single-request smoke test
 data/
-├── gpu_vm_exp_summary.csv           aggregated benchmark results
-└── gpu_summariser.py                raw-runs → summary CSV
+└── gpu_vm_exp_summary.csv           aggregated benchmark results (61 runs)
 model/                                fine-tuned GPT-2 weights go here (gitignored)
 Dockerfile                            container build
 requirements.txt                      pinned deps
