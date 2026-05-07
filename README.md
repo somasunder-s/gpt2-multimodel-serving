@@ -1,6 +1,8 @@
 # gpt2-multimodel-serving
 
-A **multi-model GPT-2 inference server** built with FastAPI and deployed via Docker + Gunicorn. Serves two domain-specific fine-tuned GPT-2 models (resume entity extraction for *internship* and *education* sections) behind a single `/generate/` endpoint, with the model chosen per-request.
+> **Personal experiment** — an exploration of how to host two domain-specific fine-tuned GPT-2 models behind a single GPU-backed endpoint, and how worker/thread/concurrency choices affect throughput.
+
+A **multi-model GPT-2 inference server** built with FastAPI and deployed via Docker + Gunicorn. Serves two fine-tuned GPT-2 models (`domain_a`, `domain_b`) behind a single `/generate/` endpoint, with the model chosen per-request. The "domains" are intentionally generic — drop in your own fine-tuned weights for whatever extraction or generation task you're working on.
 
 Includes a **GPU benchmarking suite** that load-tests the deployment across worker / thread / concurrency configurations on NVIDIA L4 instances and writes results to CSV for analysis.
 
@@ -17,7 +19,7 @@ Includes a **GPU benchmarking suite** that load-tests the deployment across work
                             select model by name
                             │                │
                             ▼                ▼
-                      internship       education
+                       domain_a         domain_b
                         GPT-2            GPT-2
                        (CUDA)           (CUDA)
                             │                │
@@ -33,7 +35,7 @@ Both models are loaded once at process start and pinned to GPU. Each request spe
 
 - **Single endpoint, multi-model** — operational simplicity over deploying two services. Routing is one dict lookup; memory cost is the sum of model weights, which fit on a single L4 (24 GB).
 - **Gunicorn + uvicorn workers** — process-level parallelism (workers) for CPU-bound preprocessing, async (uvicorn) inside each worker for I/O. The Dockerfile defaults to `-w 10 --threads 32`, picked because the sweep below showed throughput plateaus around concurrency 7–9 regardless of worker/thread count, and 10×32 has the most headroom before errors appear.
-- **Two separate models** instead of one model with a routing prefix — each section (internship / education) was fine-tuned on its own labeled data and the two models had different convergence behavior. Routing-by-name keeps the inference code dumb and lets the training side iterate independently.
+- **Two separate models** instead of one model with a routing prefix — each domain was fine-tuned on its own labeled data with different convergence behavior, so squashing them into a single conditioned model would have meant either retraining together or picking one's hyperparameters. Routing-by-name keeps the inference code dumb and lets the training side iterate independently.
 - **Docker** — reproducible runtime, deployable to any GPU host (GCP, AWS, on-prem) without environment drift.
 
 ## Benchmarking results
@@ -69,8 +71,8 @@ Sweep across worker × thread × client-concurrency on **NVIDIA L4** (16 vCPU, 5
 app/
 └── app.py                         FastAPI app: model loading, /generate endpoint
 client_calls/
-├── ngrok_call.py, ngrok_call2.py   load-test clients (concurrent POSTs)
-└── res_api.py                       single-request smoke test
+├── load_test.py, load_test_sweep.py  load-test clients (concurrent POSTs)
+└── smoke_test.py                      single-request smoke test
 data/
 ├── gpu_vm_exp_summary.csv           aggregated benchmark results
 └── gpu_summariser.py                raw-runs → summary CSV
@@ -106,7 +108,7 @@ docker run --gpus all -p 8000:8000 -v $(pwd)/model:/app/model gpt2-serving
 curl -X POST http://localhost:8000/generate/ \
   -H "Content-Type: application/json" \
   -d '{
-    "prompts": ["Jane Doe — QA Engineer …"],
+    "prompts": ["Whatever input shape your fine-tuned model expects."],
     "model": "domain_a",
     "max_length": 512
   }'
@@ -114,6 +116,6 @@ curl -X POST http://localhost:8000/generate/ \
 
 ## Notes
 
-- Sample inputs in `client_calls/` use a synthetic resume (`Jane Doe`); they're load-test fixtures, not real candidate data.
-- Fine-tuned weights are not in the repo. Drop your own into `model/<name>_agent_tagged_model/` to use it.
-- This is the **serving** half of a larger workflow — the training half lived in a separate notebook outside this repo.
+- Sample inputs in `client_calls/` are placeholder strings — they're load-test fixtures and don't mean anything to the model.
+- Fine-tuned weights are not in the repo. Drop your own into `model/domain_a_model/` and `model/domain_b_model/` to use it.
+- This is the **serving** half of a larger workflow — training the two GPT-2 models was a separate exercise and isn't included here.
